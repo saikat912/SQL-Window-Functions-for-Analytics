@@ -1,3 +1,4 @@
+```sql
 ###############################################################
 ###############################################################
 -- Guided Project: SQL Window Functions for Analytics
@@ -31,7 +32,9 @@ FROM employees;
 
 -- 2.2: Retrieve the employee_id, first_name, 
 -- hire_date of employees for different departments
-
+SELECT employee_id, first_name, department, hire_date,
+ROW_NUMBER() OVER(PARTITION BY department ORDER BY hire_date) AS Row_N
+FROM employees;
 
 #############################
 -- Task Three: Ranking
@@ -46,16 +49,20 @@ ROW_NUMBER() OVER(PARTITION BY department
 FROM employees;
 
 -- 3.2: Let's use the RANK() function
-
+SELECT first_name, email, department, salary,
+RANK() OVER(PARTITION BY department
+			ORDER BY salary DESC) AS Rank_N
+FROM employees;
 
 -- Exercise 3.1: Retrieve the hire_date. Return details of
 -- employees hired on or before 31st Dec, 2005 and are in
 -- First Aid, Movies and Computers departments 
-SELECT first_name, email, department, salary, ___
+SELECT first_name, email, department, salary,
 RANK() OVER(PARTITION BY department
 			ORDER BY salary DESC)
 FROM employees
-WHERE ___ AND department ___;
+WHERE hire_date <= '2005-12-31'
+AND department IN ('First Aid','Movies','Computers');
 
 -- This returns how many employees are in each department
 SELECT department, COUNT(*) dept_count
@@ -64,7 +71,14 @@ GROUP BY department
 ORDER BY dept_count DESC;
 
 -- 3.3: Return the fifth ranked salary for each department
-
+WITH salary_rank AS (
+SELECT first_name, email, department, salary,
+RANK() OVER(PARTITION BY department ORDER BY salary DESC) AS Rank_N
+FROM employees
+)
+SELECT *
+FROM salary_rank
+WHERE Rank_N = 5;
 
 -- Create a common table expression to retrieve the customer_id, 
 -- and how many times the customer has purchased from the mall 
@@ -91,7 +105,9 @@ ORDER BY purchase DESC;
 
 -- 4.1: Group the employees table into five groups
 -- based on the order of their salaries
-
+SELECT first_name, email, department, salary,
+NTILE(5) OVER(ORDER BY salary DESC) AS salary_group
+FROM employees;
 
 -- 4.2: Group the employees table into five groups for 
 -- each department based on the order of their salaries
@@ -109,7 +125,11 @@ NTILE(5) OVER(ORDER BY salary DESC) AS rank_of_salary
 FROM employees)
 
 -- 4.3: Find the average salary for each group of employees
-
+SELECT rank_of_salary,
+AVG(salary) AS avg_salary
+FROM salary_ranks
+GROUP BY rank_of_salary
+ORDER BY rank_of_salary;
 
 #############################
 -- Task Five: Aggregate Window Functions - Part One
@@ -132,19 +152,26 @@ GROUP BY department, first_name
 ORDER BY department;
 
 -- The solution
-
+SELECT first_name, department,
+COUNT(*) OVER(PARTITION BY department) AS dept_count
+FROM employees
+ORDER BY department;
 
 -- 5.3: Total Salary for all employees
-
+SELECT first_name, department, salary,
+SUM(salary) OVER() AS total_salary
+FROM employees;
 
 -- 5.4: Total Salary for each department
-
+SELECT first_name, department, salary,
+SUM(salary) OVER(PARTITION BY department) AS total_salary
+FROM employees;
 
 -- Exercise 5.1: Total Salary for each department and
 -- order by the hire date. Call the new column running_total
 SELECT first_name, hire_date, department, salary,
-___(___) OVER(___ ___
-				 ___ ___) AS ___
+SUM(salary) OVER(PARTITION BY department
+				 ORDER BY hire_date) AS running_total
 FROM employees;
 
 #############################
@@ -159,14 +186,16 @@ FROM employees;
 
 -- 6.1: Retrieve the first names, department and 
 -- number of employees working in that department and region
-
+SELECT first_name, department, region_id,
+COUNT(*) OVER(PARTITION BY department, region_id) AS dept_count
+FROM employees;
 
 -- Exercise 6.1: Retrieve the first names, department and 
 -- number of employees working in that department and in region 2
 SELECT first_name, department, 
-___ OVER(___ ___) AS dept_count
+COUNT(*) OVER(PARTITION BY department) AS dept_count
 FROM employees
-___ ___ = ___;
+WHERE region_id = 2;
 
 -- Create a common table expression to retrieve the customer_id, 
 -- ship_mode, and how many times the customer has purchased from the mall
@@ -180,10 +209,9 @@ ORDER BY purchase DESC
 -- Exercise 6.2: Calculate the cumulative sum of customers purchase
 -- for the different ship mode
 SELECT customer_id, ship_mode, purchase, 
-___(___) OVER(___ ___
+SUM(purchase) OVER(PARTITION BY ship_mode
 				   ORDER BY customer_id ASC) AS sum_of_sales
 FROM purchase_count;
-
 
 #############################
 -- Task Seven: Window Frames - Part One
@@ -200,13 +228,22 @@ FROM employees
 ORDER BY hire_date;
 
 -- The solution
-
+SELECT first_name, hire_date, salary,
+SUM(salary) OVER(ORDER BY hire_date
+				 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
+FROM employees;
 
 -- 7.2: Add the current row and previous row
-
+SELECT first_name, hire_date, salary,
+SUM(salary) OVER(ORDER BY hire_date
+				 ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS total_salary
+FROM employees;
 
 -- 7.3: Find the running average
-
+SELECT first_name, hire_date, salary,
+AVG(salary) OVER(ORDER BY hire_date
+				 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_average
+FROM employees;
 
 -- What do you think the result of the query will be?
 SELECT first_name, hire_date, salary,
@@ -227,7 +264,12 @@ FIRST_VALUE(department) OVER(ORDER BY department ASC) first_department
 FROM departments;
 
 -- 8.2: Retrieve the last department in the departments table
-
+SELECT department, division,
+LAST_VALUE(department) OVER(
+ORDER BY department
+ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) AS last_department
+FROM departments;
 
 -- Create a common table expression to retrieve the customer_id, 
 -- ship_mode, and how many times the customer has purchased from the mall
@@ -268,10 +310,27 @@ FROM sales
 GROUP BY sub_category;
 
 -- 9.4: Use the GROUPING SETS clause
-
+SELECT ship_mode, category, sub_category,
+SUM(quantity)
+FROM sales
+GROUP BY GROUPING SETS
+(
+(ship_mode),
+(category),
+(sub_category)
+);
 
 --9.5: Use the ROLLUP clause
-
+SELECT ship_mode, category,
+SUM(quantity)
+FROM sales
+GROUP BY ROLLUP(ship_mode, category);
 
 --9.6: Use the CUBE clause
+SELECT ship_mode, category,
+SUM(quantity)
+FROM sales
+GROUP BY CUBE(ship_mode, category);
+```
+
 
